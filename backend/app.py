@@ -93,14 +93,15 @@ def rate_movie():
     session = SessionLocal()
 
     rating = Rating(
+        user_id=data["user_id"],
         movie_id=data["movie_id"],
         score=data["score"]
     )
+
     session.add(rating)
     session.commit()
+    return jsonify({"status": "ok"})
 
-    session.close()
-    return jsonify({"message": "Rating added"}), 201
 
 @app.route("/search", methods=["GET"])
 def search():
@@ -110,6 +111,48 @@ def search():
 
     results = search_movies(query)
     return jsonify(results)
+
+@app.route("/recommendations/<int:user_id>", methods=["GET"])
+def recommendations(user_id):
+    session = SessionLocal()
+
+    top_genre = (
+        session.query(Movie.genre)
+        .filter(Movie.user_id == user_id)
+        .group_by(Movie.genre)
+        .order_by(func.count(Movie.genre).desc())
+        .first()
+    )
+
+    if not top_genre:
+        return jsonify([])
+
+    top_genre = top_genre[0]
+
+    movies = (
+        session.query(
+            Movie.id,
+            Movie.title,
+            Movie.genre,
+            func.avg(Rating.score).label("avg_rating")
+        )
+        .join(Rating, Rating.movie_id == Movie.id)
+        .filter(Movie.genre == top_genre)
+        .group_by(Movie.id)
+        .order_by(func.avg(Rating.score).desc())
+        .limit(3)
+        .all()
+    )
+
+    return jsonify([
+        {
+            "id": m.id,
+            "title": m.title,
+            "genre": m.genre,
+            "avg_rating": round(m.avg_rating, 2)
+        }
+        for m in movies
+    ])
 
 
 

@@ -15,7 +15,6 @@ if "page" not in st.session_state:
 
 
 
-# LOGIN / REGISTER
 if st.session_state.user is None and st.session_state.page == "login":
     st.title("Login")
 
@@ -70,14 +69,12 @@ if st.session_state.user is None and st.session_state.page == "register":
 
 st.success(f"Logged in as {st.session_state.user['username']}")
 
-# LOGGED IN UI
 st.title("🎬 Movie Recommender")
 
 if st.button("🚪 Logout"):
     st.session_state.user = None
     st.rerun()
 
-# Helper functions
 def get_movies():
     try:
         r = requests.get(f"{API_URL}/movies")
@@ -86,6 +83,14 @@ def get_movies():
         st.error("Backend not reachable")
         return []
 
+def get_recommendations():
+    try:
+        r = requests.get(
+            f"{API_URL}/recommendations/{st.session_state.user['id']}"
+        )
+        return r.json()
+    except:
+        return []
 
 def add_movie(title, genre):
     if st.session_state.user:
@@ -105,10 +110,14 @@ def add_movie(title, genre):
 def rate_movie(movie_id, score):
     requests.post(
         f"{API_URL}/rate",
-        json={"movie_id": movie_id, "score": score}
+        json={
+            "user_id": st.session_state.user["id"],
+            "movie_id": movie_id,
+            "score": score
+        }
     )
 
-# SEARCH
+
 st.header("🔍 Search movies")
 
 query = st.text_input("Search by title or genre")
@@ -126,7 +135,21 @@ if query:
     except:
         st.error("Search service unavailable")
 
-# MOVIES LIST
+
+st.header("Recommended for you")
+
+recs = get_recommendations()
+
+if recs:
+    for m in recs:
+        st.write(
+            f"**{m['title']}** ({m['genre']}) — ⭐ {m['avg_rating']}"
+        )
+else:
+    st.info("Rate some movies to get personalized recommendations.")
+
+
+
 st.header("Movie Library")
 
 movies = get_movies()
@@ -140,7 +163,6 @@ if movies:
 else:
     st.info("No movies yet.")
 
-# ADD MOVIE
 st.divider()
 st.header("➕ Add new movie")
 
@@ -154,7 +176,6 @@ with st.form("add_movie"):
         st.success("Movie added!")
         st.rerun()
 
-# RATE MOVIE
 st.divider()
 st.header("⭐ Rate movie")
 
