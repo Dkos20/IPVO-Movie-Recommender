@@ -6,7 +6,7 @@ INDEX_NAME = "movies"
 
 
 def create_index():
-    for _ in range(10):  # retry 10x
+    for _ in range(10):
         try:
             if not es.indices.exists(index=INDEX_NAME):
                 es.indices.create(
