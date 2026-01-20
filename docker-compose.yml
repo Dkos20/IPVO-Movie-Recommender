@@ -66,6 +66,15 @@ services:
       - ipvo_net  
     restart: unless-stopped
 
+  redis:
+    image: redis:7
+    container_name: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - ipvo_net
+    restart: unless-stopped
+
 
   frontend:
     build: ./frontend

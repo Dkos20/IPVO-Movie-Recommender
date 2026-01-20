@@ -1,12 +1,18 @@
+import redis
+import json
 from flask import Flask, request, jsonify
-from sqlalchemy import func
+from sqlalchemy import func, cast, Float
 from search import create_index, index_movie, search_movies
 from werkzeug.security import generate_password_hash, check_password_hash
-
 from db import SessionLocal, Movie, Rating, User, init_db
 
 app = Flask(__name__)
 
+redis_client = redis.Redis(
+    host="redis",
+    port=6379,
+    decode_responses=True
+)
 
 @app.route("/login", methods=["POST"])
 def login():
@@ -100,7 +106,10 @@ def rate_movie():
 
     session.add(rating)
     session.commit()
+    redis_client.delete(f"recommendations:{data['user_id']}")
+
     return jsonify({"status": "ok"})
+
 
 
 @app.route("/search", methods=["GET"])
@@ -112,48 +121,57 @@ def search():
     results = search_movies(query)
     return jsonify(results)
 
-@app.route("/recommendations/<int:user_id>", methods=["GET"])
+
+@app.route("/recommendations/<int:user_id>")
 def recommendations(user_id):
+    cache_key = f"recommendations:{user_id}"
+    cached = redis_client.get(cache_key)
+
+    if cached:
+        return jsonify(json.loads(cached))
+
     session = SessionLocal()
 
-    top_genre = (
+    favorite_genre = (
         session.query(Movie.genre)
-        .filter(Movie.user_id == user_id)
+        .join(Rating, Rating.movie_id == Movie.id)
+        .filter(Rating.user_id == user_id)
         .group_by(Movie.genre)
         .order_by(func.count(Movie.genre).desc())
         .first()
     )
 
-    if not top_genre:
+    if not favorite_genre:
         return jsonify([])
 
-    top_genre = top_genre[0]
-
-    movies = (
+    rows = (
         session.query(
             Movie.id,
             Movie.title,
             Movie.genre,
-            func.avg(Rating.score).label("avg_rating")
+            cast(func.avg(Rating.score), Float).label("avg_rating")
         )
-        .join(Rating, Rating.movie_id == Movie.id)
-        .filter(Movie.genre == top_genre)
+        .join(Rating)
+        .filter(Movie.genre == favorite_genre[0])
         .group_by(Movie.id)
         .order_by(func.avg(Rating.score).desc())
         .limit(3)
         .all()
     )
 
-    return jsonify([
+    result = [
         {
-            "id": m.id,
-            "title": m.title,
-            "genre": m.genre,
-            "avg_rating": round(m.avg_rating, 2)
+            "id": r.id,
+            "title": r.title,
+            "genre": r.genre,
+            "avg_rating": round(r.avg_rating, 2)
         }
-        for m in movies
-    ])
+        for r in rows
+    ]
 
+    redis_client.setex(cache_key, 300, json.dumps(result))
+
+    return jsonify(result)
 
 
 @app.route("/health", methods=["GET"])

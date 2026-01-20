@@ -138,15 +138,21 @@ if query:
 
 st.header("Recommended for you")
 
-recs = get_recommendations()
+try:
+    res = requests.get(
+        f"{API_URL}/recommendations/{st.session_state.user['id']}"
+    )
+    recs = res.json()
 
-if recs:
-    for m in recs:
-        st.write(
-            f"**{m['title']}** ({m['genre']}) — ⭐ {m['avg_rating']}"
-        )
-else:
-    st.info("Rate some movies to get personalized recommendations.")
+    if recs:
+        for m in recs:
+            st.write(
+                f"**{m['title']}** ({m['genre']}) — ⭐ {m['avg_rating']}"
+            )
+    else:
+        st.info("Not enough data for recommendations yet :(")
+except:
+    st.error("Recommendation service unavailable...")
 
 
 
