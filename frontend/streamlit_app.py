@@ -67,13 +67,26 @@ if st.session_state.user is None and st.session_state.page == "register":
 
     st.stop()
 
-st.success(f"Logged in as {st.session_state.user['username']}")
+#stupci
+col1, col2 = st.columns([4, 1])
+#left_col, right_col = st.columns([2, 1])
 
-st.title("🎬 Movie Recommender")
 
-if st.button("🚪 Logout"):
-    st.session_state.user = None
-    st.rerun()
+with col1:
+    st.success(f"Logged in as {st.session_state.user['username']}")
+
+with col2:
+    if st.button("Logout"):
+        st.session_state.user = None
+        st.rerun()
+
+st.title("Movie Recommender")
+
+st.markdown(
+    "**Discover movies tailored to your taste.**  \n"
+    "Rate films, explore the library, and get personalized recommendations."
+)
+
 
 def get_movies():
     try:
@@ -118,9 +131,9 @@ def rate_movie(movie_id, score):
     )
 
 
-st.header("🔍 Search movies")
+st.header("Search movies")
 
-query = st.text_input("Search by title or genre")
+query = st.text_input("Search for movies by title or genre to quickly find what you're looking for.")
 
 if query:
     try:
@@ -135,8 +148,14 @@ if query:
     except:
         st.error("Search service unavailable")
 
+st.divider()
 
 st.header("Recommended for you")
+st.markdown(
+    "These personalized recommendations are carefully selected based on your "
+    "ratings, preferences, and activity, helping you uncover films that match "
+    "your unique taste."
+)
 
 try:
     res = requests.get(
@@ -154,10 +173,13 @@ try:
 except:
     st.error("Recommendation service unavailable...")
 
-
+st.divider()
 
 st.header("Movie Library")
 
+st.markdown(
+    "Dive into our movie library and explore a growing collection of films."
+    "Check genres, ratings, and find inspiration for your next watch.")
 movies = get_movies()
 
 if movies:
@@ -169,30 +191,33 @@ if movies:
 else:
     st.info("No movies yet.")
 
-st.divider()
-st.header("➕ Add new movie")
 
-with st.form("add_movie"):
-    title = st.text_input("Title")
-    genre = st.text_input("Genre")
-    submitted = st.form_submit_button("Add movie")
+with st.sidebar:
+    st.header("➕ Add new movie")
 
-    if submitted and title and genre:
-        add_movie(title, genre)
-        st.success("Movie added!")
-        st.rerun()
+    with st.form("add_movie"):
+        title = st.text_input("Title")
+        genre = st.text_input("Genre")
+        submitted = st.form_submit_button("Add movie")
 
-st.divider()
-st.header("⭐ Rate movie")
+        if submitted and title and genre:
+            add_movie(title, genre)
+            st.success("Movie added!")
+            st.rerun()
 
-if movies:
-    movie_map = {f"{m['title']} ({m['genre']})": m["id"] for m in movies}
-    selected = st.selectbox("Select movie", movie_map.keys())
-    score = st.slider("Rating", 1, 5, 3)
 
-    if st.button("Submit rating"):
-        rate_movie(movie_map[selected], score)
-        st.success("Rating submitted!")
-        st.rerun()
-else:
-    st.info("Add a movie first.")
+with st.sidebar:
+    st.divider()
+    st.header("⭐ Rate movie")
+
+    if movies:
+        movie_map = {f"{m['title']} ({m['genre']})": m["id"] for m in movies}
+        selected = st.selectbox("Select movie", movie_map.keys())
+        score = st.slider("Rating", 1, 5, 3)
+
+        if st.button("Submit rating"):
+            rate_movie(movie_map[selected], score)
+            st.success("Rating submitted!")
+            st.rerun()
+    else:
+        st.info("Add a movie first.")
