@@ -49,17 +49,24 @@ def register():
     return jsonify({"status": "ok"})
 
 
-
-@app.route("/movies", methods=["GET"])
-def get_movies():
+@app.route("/movies/latest", methods=["GET"])
+def latest_movies():
     session = SessionLocal()
 
-    movies = session.query(
-        Movie.id,
-        Movie.title,
-        Movie.genre,
-        func.avg(Rating.score).label("avg_rating")
-    ).outerjoin(Rating).group_by(Movie.id).all()
+    movies = (
+        session.query(
+            Movie.id,
+            Movie.title,
+            Movie.genre,
+            Movie.tmdb_rating,
+            func.avg(Rating.score).label("avg_rating")
+        )
+        .outerjoin(Rating)
+        .group_by(Movie.id)
+        .order_by(Movie.id.desc())
+        .limit(10)
+        .all()
+    )
 
     session.close()
 
@@ -68,29 +75,13 @@ def get_movies():
             "id": m.id,
             "title": m.title,
             "genre": m.genre,
-            "avg_rating": round(m.avg_rating, 2) if m.avg_rating else None
+            "tmdb_rating": float(m.tmdb_rating) if m.tmdb_rating is not None else None,
+            "avg_rating": round(float(m.avg_rating), 2) if m.avg_rating else None
         }
         for m in movies
     ])
 
 
-@app.route("/movies", methods=["POST"])
-def add_movie():
-    data = request.json
-    session = SessionLocal()
-    user_id = data["user_id"]
-
-    movie = Movie(
-        title=data["title"],
-        genre=data["genre"],
-        user_id=user_id
-    )
-    session.add(movie)
-    session.commit()
-    index_movie(movie)
-
-    session.close()
-    return jsonify({"message": "Movie added"}), 201
 
 
 @app.route("/rate", methods=["POST"])
@@ -122,6 +113,7 @@ def search():
     return jsonify(results)
 
 
+
 @app.route("/recommendations/<int:user_id>")
 def recommendations(user_id):
     cache_key = f"recommendations:{user_id}"
@@ -132,46 +124,74 @@ def recommendations(user_id):
 
     session = SessionLocal()
 
-    favorite_genre = (
-        session.query(Movie.genre)
-        .join(Rating, Rating.movie_id == Movie.id)
-        .filter(Rating.user_id == user_id)
-        .group_by(Movie.genre)
-        .order_by(func.count(Movie.genre).desc())
-        .first()
-    )
-
-    if not favorite_genre:
-        return jsonify([])
-
-    rows = (
-        session.query(
-            Movie.id,
-            Movie.title,
-            Movie.genre,
-            cast(func.avg(Rating.score), Float).label("avg_rating")
+    try:
+        favorite_genre = (
+            session.query(Movie.genre)
+            .join(Rating, Rating.movie_id == Movie.id)
+            .filter(Rating.user_id == user_id)
+            .group_by(Movie.genre)
+            .order_by(func.count(Movie.genre).desc())
+            .first()
         )
-        .join(Rating)
-        .filter(Movie.genre == favorite_genre[0])
-        .group_by(Movie.id)
-        .order_by(func.avg(Rating.score).desc())
-        .limit(3)
-        .all()
-    )
 
-    result = [
-        {
-            "id": r.id,
-            "title": r.title,
-            "genre": r.genre,
-            "avg_rating": round(r.avg_rating, 2)
-        }
-        for r in rows
-    ]
+        if not favorite_genre:
+            favorite_genre = (
+                session.query(Movie.genre)
+                .group_by(Movie.genre)
+                .order_by(func.count(Movie.id).desc())
+                .first()
+            )
 
-    redis_client.setex(cache_key, 300, json.dumps(result))
+        if not favorite_genre:
+            return jsonify([])
 
-    return jsonify(result)
+        rated_movie_ids = (
+            session.query(Rating.movie_id)
+            .filter(Rating.user_id == user_id)
+            .subquery()
+        )
+
+        avg_user_rating = cast(func.coalesce(func.avg(Rating.score), 0), Float)
+        tmdb = cast(func.coalesce(Movie.tmdb_rating, 0), Float)
+
+        hybrid_score = (0.7 * avg_user_rating) + (0.3 * tmdb)
+
+        rows = (
+            session.query(
+                Movie.id,
+                Movie.title,
+                Movie.genre,
+                avg_user_rating.label("avg_rating"),
+                tmdb.label("tmdb_rating"),
+                hybrid_score.label("hybrid_score")
+            )
+            .outerjoin(Rating, Rating.movie_id == Movie.id)
+            .filter(Movie.genre == favorite_genre[0])
+            .filter(~Movie.id.in_(rated_movie_ids))
+            .group_by(Movie.id)
+            .order_by(hybrid_score.desc())
+            .limit(3)
+            .all()
+        )
+
+        result = [
+            {
+                "id": r.id,
+                "title": r.title,
+                "genre": r.genre,
+                "avg_rating": round(float(r.avg_rating), 2) if r.avg_rating is not None else 0,
+                "tmdb_rating": round(float(r.tmdb_rating), 2) if r.tmdb_rating is not None else 0,
+                "score": round(float(r.hybrid_score), 2)
+            }
+            for r in rows
+        ]
+
+        redis_client.setex(cache_key, 300, json.dumps(result))
+        return jsonify(result)
+
+    finally:
+        session.close()
+
 
 
 @app.route("/health", methods=["GET"])

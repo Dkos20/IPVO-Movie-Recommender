@@ -21,6 +21,7 @@ services:
     container_name: backend1
     environment:
       DATABASE_URL: postgresql://movies_user:movies_pass@postgres:5432/movies
+      TMDB_API_KEY: 77bb213fed9cd4baa2746e3ce0aa1f90
     depends_on:
       - postgres
     networks:
@@ -32,6 +33,7 @@ services:
     container_name: backend2
     environment:
       DATABASE_URL: postgresql://movies_user:movies_pass@postgres:5432/movies
+      TMDB_API_KEY: 77bb213fed9cd4baa2746e3ce0aa1f90
     depends_on:
       - postgres
     networks:

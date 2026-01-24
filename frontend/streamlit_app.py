@@ -67,9 +67,8 @@ if st.session_state.user is None and st.session_state.page == "register":
 
     st.stop()
 
-#stupci
+
 col1, col2 = st.columns([4, 1])
-#left_col, right_col = st.columns([2, 1])
 
 
 with col1:
@@ -105,18 +104,6 @@ def get_recommendations():
     except:
         return []
 
-def add_movie(title, genre):
-    if st.session_state.user:
-        requests.post(
-            f"{API_URL}/movies",
-            json={
-                "title": title,
-                "genre": genre,
-                "user_id": st.session_state.user["id"]
-            }
-        )
-    else:
-        st.error("You must be logged in to add a movie")
 
 
 
@@ -175,49 +162,41 @@ except:
 
 st.divider()
 
-st.header("Movie Library")
+movies = []
 
-st.markdown(
-    "Dive into our movie library and explore a growing collection of films."
-    "Check genres, ratings, and find inspiration for your next watch.")
-movies = get_movies()
+try:
+    res = requests.get(f"{API_URL}/movies/latest")
+    if res.status_code == 200:
+        movies = res.json()
+    else:
+        st.error("Could not load latest movies")
+except:
+    st.error("Backend not reachable for latest movies")
+
+st.header("⭐ Rate movie")
 
 if movies:
-    for m in movies:
-        st.write(
-            f"**{m['title']}** ({m['genre']}) "
-            f"— ⭐ {m['avg_rating'] if m['avg_rating'] else 'N/A'}"
-        )
+    movie_map = {f"{m['title']} ({m['genre']})": m["id"] for m in movies}
+    selected = st.selectbox("Select movie", list(movie_map.keys()))
+    score = st.slider("Rating", 1, 5, 3)
+
+    if st.button("Submit rating"):
+        rate_movie(movie_map[selected], score)
+        st.success("Rating submitted!")
+        st.rerun()
 else:
-    st.info("No movies yet.")
-
-
-with st.sidebar:
-    st.header("➕ Add new movie")
-
-    with st.form("add_movie"):
-        title = st.text_input("Title")
-        genre = st.text_input("Genre")
-        submitted = st.form_submit_button("Add movie")
-
-        if submitted and title and genre:
-            add_movie(title, genre)
-            st.success("Movie added!")
-            st.rerun()
-
+    st.info("No movies loaded yet.")
 
 with st.sidebar:
     st.divider()
-    st.header("⭐ Rate movie")
+    st.subheader("Recently added movies")
 
     if movies:
-        movie_map = {f"{m['title']} ({m['genre']})": m["id"] for m in movies}
-        selected = st.selectbox("Select movie", movie_map.keys())
-        score = st.slider("Rating", 1, 5, 3)
-
-        if st.button("Submit rating"):
-            rate_movie(movie_map[selected], score)
-            st.success("Rating submitted!")
-            st.rerun()
+        for m in movies:
+            st.markdown(
+                f"**{m['title']}**  \n"
+                f"{m['genre']} | ⭐ {m.get('tmdb_rating', 'N/A')}"
+            )
     else:
-        st.info("Add a movie first.")
+        st.info("No recent movies available.")
+
