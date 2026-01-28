@@ -6,6 +6,7 @@ from search import create_index, index_movie, search_movies
 from werkzeug.security import generate_password_hash, check_password_hash
 from db import SessionLocal, Movie, Rating, User, init_db
 
+
 app = Flask(__name__)
 
 redis_client = redis.Redis(
@@ -13,6 +14,7 @@ redis_client = redis.Redis(
     port=6379,
     decode_responses=True
 )
+
 
 @app.route("/login", methods=["POST"])
 def login():
@@ -81,6 +83,28 @@ def latest_movies():
         for m in movies
     ])
 
+
+
+@app.route("/movies", methods=["GET"])
+def all_movies():
+    session = SessionLocal()
+
+    movies = session.query(
+        Movie.id,
+        Movie.title,
+        Movie.genre
+    ).all()
+
+    session.close()
+
+    return jsonify([
+        {
+            "id": m.id,
+            "title": m.title,
+            "genre": m.genre
+        }
+        for m in movies
+    ])
 
 
 
@@ -153,8 +177,8 @@ def recommendations(user_id):
 
         avg_user_rating = cast(func.coalesce(func.avg(Rating.score), 0), Float)
         tmdb = cast(func.coalesce(Movie.tmdb_rating, 0), Float)
+        hybrid_score = (0.7 * tmdb) + (0.3 * avg_user_rating)
 
-        hybrid_score = (0.7 * avg_user_rating) + (0.3 * tmdb)
 
         rows = (
             session.query(
@@ -192,6 +216,32 @@ def recommendations(user_id):
     finally:
         session.close()
 
+@app.route("/my-ratings/<int:user_id>")
+def my_ratings(user_id):
+    session = SessionLocal()
+
+    rows = (
+        session.query(
+            Movie.title,
+            Movie.genre,
+            Rating.score
+        )
+        .join(Rating, Rating.movie_id == Movie.id)
+        .filter(Rating.user_id == user_id)
+        .order_by(Rating.id.desc())
+        .all()
+    )
+
+    session.close()
+
+    return jsonify([
+        {
+            "title": r.title,
+            "genre": r.genre,
+            "score": float(r.score)
+        }
+        for r in rows
+    ])
 
 
 @app.route("/health", methods=["GET"])

@@ -2,6 +2,15 @@ import os
 import time
 import requests
 from db import SessionLocal, Movie
+from kafka import KafkaProducer
+import json
+
+producer = KafkaProducer(
+    bootstrap_servers="kafka:9092",
+    value_serializer=lambda v: json.dumps(v).encode("utf-8")
+)
+
+
 
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
 TMDB_URL = "https://api.themoviedb.org/3"
@@ -58,14 +67,25 @@ def seed_movies():
                 genre=genre,
                 tmdb_rating=m.get("vote_average", 0)
             )
+
             session.add(movie)
+            session.commit()
+            session.refresh(movie)
+
+            producer.send("movies", {
+                "id": movie.id,
+                "title": movie.title,
+                "genre": movie.genre,
+                "tmdb_rating": movie.tmdb_rating
+            })
+
             inserted += 1
 
-        session.commit()
         time.sleep(0.2)
 
     session.close()
     print(f"Inserted {inserted} movies")
+
 
 
 if __name__ == "__main__":

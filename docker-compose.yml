@@ -21,7 +21,7 @@ services:
     container_name: backend1
     environment:
       DATABASE_URL: postgresql://movies_user:movies_pass@postgres:5432/movies
-      TMDB_API_KEY: 77bb213fed9cd4baa2746e3ce0aa1f90
+      TMDB_API_KEY: 
     depends_on:
       - postgres
     networks:
@@ -33,7 +33,7 @@ services:
     container_name: backend2
     environment:
       DATABASE_URL: postgresql://movies_user:movies_pass@postgres:5432/movies
-      TMDB_API_KEY: 77bb213fed9cd4baa2746e3ce0aa1f90
+      TMDB_API_KEY: 
     depends_on:
       - postgres
     networks:
@@ -76,6 +76,35 @@ services:
     networks:
       - ipvo_net
     restart: unless-stopped
+
+  
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - ipvo_net
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - ipvo_net
+
+  kafka_indexer:
+    build: ./kafka_indexer
+    depends_on:
+      - kafka
+      - elasticsearch
+    networks:
+      - ipvo_net
 
 
   frontend:

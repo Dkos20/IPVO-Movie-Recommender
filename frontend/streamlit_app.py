@@ -135,7 +135,9 @@ if query:
     except:
         st.error("Search service unavailable")
 
+
 st.divider()
+
 
 st.header("Recommended for you")
 st.markdown(
@@ -153,7 +155,7 @@ try:
     if recs:
         for m in recs:
             st.write(
-                f"**{m['title']}** ({m['genre']}) — ⭐ {m['avg_rating']}"
+                f"**{m['title']}** ({m['genre']}) — ⭐ {m['score']}"
             )
     else:
         st.info("Not enough data for recommendations yet :(")
@@ -173,12 +175,25 @@ try:
 except:
     st.error("Backend not reachable for latest movies")
 
+
 st.header("⭐ Rate movie")
 
-if movies:
-    movie_map = {f"{m['title']} ({m['genre']})": m["id"] for m in movies}
-    selected = st.selectbox("Select movie", list(movie_map.keys()))
-    score = st.slider("Rating", 1, 5, 3)
+all_movies = get_movies()
+
+if all_movies:
+    movie_map = {
+        f"{m['title']} ({m['genre']})": m["id"]
+        for m in all_movies
+    }
+
+    selected = st.selectbox(
+    "Select movie",
+    movie_map.keys(),
+    index=None,
+    placeholder="Search movie..."
+)
+
+    score = st.slider("Rating", 1, 10, 7)
 
     if st.button("Submit rating"):
         rate_movie(movie_map[selected], score)
@@ -186,6 +201,28 @@ if movies:
         st.rerun()
 else:
     st.info("No movies loaded yet.")
+
+
+st.divider()
+
+st.header("Your rating history")
+
+try:
+    res = requests.get(
+        f"{API_URL}/my-ratings/{st.session_state.user['id']}"
+    )
+
+    history = res.json()
+
+    if history:
+        for h in history:
+            st.write(
+                f"**{h['title']}** ({h['genre']}) — ⭐ {h['score']}/10"
+            )
+    else:
+        st.info("You haven't rated any movies yet.")
+except:
+    st.error("Could not load rating history.")
 
 with st.sidebar:
     st.divider()
