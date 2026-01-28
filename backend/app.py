@@ -205,7 +205,7 @@ def recommendations(user_id):
                 "genre": r.genre,
                 "avg_rating": round(float(r.avg_rating), 2) if r.avg_rating is not None else 0,
                 "tmdb_rating": round(float(r.tmdb_rating), 2) if r.tmdb_rating is not None else 0,
-                "score": round(float(r.hybrid_score), 2)
+                "score": round(float(r.tmdb_rating), 2)
             }
             for r in rows
         ]
